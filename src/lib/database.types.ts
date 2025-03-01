@@ -1,17 +1,19 @@
+import { Timestamp } from "firebase/firestore";
+
 export interface User {
   id: string;
   email: string;
   name: string;
   role: "admin" | "user";
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Attendance {
   id: string;
   userId: string;
   eventId: string;
-  timestamp: Date;
+  timestamp: Timestamp;
   status: "present" | "absent" | "late";
 }
 
@@ -19,18 +21,18 @@ export interface Event {
   id: string;
   name: string;
   description: string;
-  date: Date;
+  date: Timestamp;
   location: string;
   organizerId: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface QRCode {
   id: string;
   eventId: string;
-  validFrom: Date;
-  validUntil: Date;
-  createdAt: Date;
+  validFrom: Timestamp;
+  validUntil: Timestamp;
+  createdAt: Timestamp;
   createdBy: string;
 }

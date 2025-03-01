@@ -1,105 +1,109 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../lib/supabase';
-import { Session, User } from '@supabase/supabase-js';
+import { createContext, useState, useEffect, useContext } from "react";
+import {
+  User,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { auth } from "../lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
-  session: Session | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => Promise<void>;
+  currentUser: User | null;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  signUp: (email: string, password: string, name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   user: null,
-  session: null,
-  login: async () => false,
-  logout: async () => {},
-  loading: true
+  currentUser: null,
+  loading: true,
+  signIn: async () => {},
+  signOut: async () => {},
+  signUp: async () => {},
 });
 
-export const useAuth = () => useContext(AuthContext);
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-          setIsAuthenticated(true);
-          setUser(session.user);
-          setSession(session);
-        }
-      } catch (error) {
-        console.error('Error checking session:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    checkSession();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false);
+    });
 
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setIsAuthenticated(!!session);
-        setUser(session?.user || null);
-        setSession(session);
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error("Error signing in:", error);
+      throw error;
+    }
+  };
+
+  const signUp = async (email: string, password: string, name: string) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
         email,
-        password,
+        password
+      );
+      await updateProfile(userCredential.user, { displayName: name });
+
+      // Create user document in Firestore
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        email,
+        name,
+        role: "user",
+        createdAt: new Date(),
+        updatedAt: new Date(),
       });
-
-      if (error) {
-        console.error('Login error:', error);
-        return false;
-      }
-      
-      setIsAuthenticated(true);
-      setUser(data.user);
-      setSession(data.session);
-      
-      return true;
     } catch (error) {
-      console.error('Login error:', error);
-      return false;
+      console.error("Error signing up:", error);
+      throw error;
     }
   };
 
-  const logout = async () => {
+  const signOut = async () => {
     try {
-      await supabase.auth.signOut();
-      setIsAuthenticated(false);
-      setUser(null);
-      setSession(null);
+      await firebaseSignOut(auth);
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Error signing out:", error);
+      throw error;
     }
   };
 
-  return (
-    <AuthContext.Provider value={{ isAuthenticated, user, session, login, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    isAuthenticated: !!user,
+    user,
+    currentUser: user,
+    loading,
+    signIn,
+    signOut,
+    signUp,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};
+
+export default AuthContext;

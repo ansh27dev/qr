@@ -1,12 +1,12 @@
-import React from 'react';
-import { ListGroup, Badge } from 'react-bootstrap';
-import { CalendarDays } from 'lucide-react';
+import React from "react";
+import { Table, Badge } from "react-bootstrap";
 
 export interface AttendanceRecord {
   id: string;
   date: string;
   className: string;
-  status: 'present' | 'absent';
+  status: "present" | "absent";
+  eventTitle?: string;
 }
 
 interface AttendanceListProps {
@@ -15,32 +15,37 @@ interface AttendanceListProps {
 
 const AttendanceList: React.FC<AttendanceListProps> = ({ records }) => {
   return (
-    <div className="attendance-list">
-      <ListGroup>
-        {records.length > 0 ? (
-          records.map((record) => (
-            <ListGroup.Item key={record.id} className="d-flex justify-content-between align-items-center">
-              <div>
-                <div className="d-flex align-items-center">
-                  <CalendarDays size={16} className="me-2" />
-                  <span className="fw-bold">{record.className}</span>
-                </div>
-                <small className="text-muted">{new Date(record.date).toLocaleDateString()}</small>
-              </div>
-              <Badge 
-                bg={record.status === 'present' ? 'success' : 'danger'}
-              >
-                {record.status === 'present' ? 'Present' : 'Absent'}
-              </Badge>
-            </ListGroup.Item>
-          ))
+    <Table responsive hover>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Event</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {records.length === 0 ? (
+          <tr>
+            <td colSpan={3} className="text-center">
+              No attendance records found
+            </td>
+          </tr>
         ) : (
-          <ListGroup.Item className="text-center text-muted">
-            No attendance records found
-          </ListGroup.Item>
+          records.map((record) => (
+            <tr key={record.id}>
+              <td>{new Date(record.date).toLocaleDateString()}</td>
+              <td>{record.className}</td>
+              <td>
+                <Badge bg={record.status === "present" ? "success" : "danger"}>
+                  {record.status.charAt(0).toUpperCase() +
+                    record.status.slice(1)}
+                </Badge>
+              </td>
+            </tr>
+          ))
         )}
-      </ListGroup>
-    </div>
+      </tbody>
+    </Table>
   );
 };
 
