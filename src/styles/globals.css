@@ -1,0 +1,58 @@
+/* QR Scanner Styles */
+#html5qr-code-full-region {
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+#html5qr-code-full-region video {
+  width: 100% !important;
+  border-radius: 8px;
+}
+
+/* Location Display Styles */
+.location-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.location-info svg {
+  color: #666;
+}
+
+/* Attendance List Styles */
+.attendance-record {
+  transition: background-color 0.2s;
+}
+
+.attendance-record:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.attendance-location {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #666;
+}
+
+.attendance-location svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* QR Scanner Container */
+.qr-scanner-container {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* Hide default HTML5 QR Scanner elements we don't need */
+#html5qr-code-full-region > img {
+  display: none;
+}
+
+#html5qr-code-full-region > div:last-child {
+  display: none;
+}

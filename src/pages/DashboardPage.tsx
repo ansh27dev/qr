@@ -13,16 +13,37 @@ import {
   where,
   getDocs,
   Timestamp,
+  limit,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { exportToCSV, getCurrentMonthData } from "../utils/csvExport";
+
+interface Course {
+  id: string;
+  code: string;
+  title: string;
+  department: string;
+  semester: string;
+}
+
+interface Session {
+  id: string;
+  courseId: string;
+  title: string;
+  location: string;
+  startTime: Timestamp;
+  endTime: Timestamp;
+  type: string;
+  status: string;
+}
 
 interface AttendanceRecord {
   id: string;
   date: string;
   className: string;
   status: "present" | "absent";
-  eventTitle?: string;
+  courseCode?: string;
+  location?: string;
 }
 
 const DashboardPage: React.FC = () => {
@@ -36,63 +57,114 @@ const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadAttendanceData = async () => {
       try {
-        if (isOnline && user) {
-          // Fetch attendance records
-          const attendanceRef = collection(db, "attendance");
-          const attendanceQuery = query(
-            attendanceRef,
-            where("userId", "==", user.uid)
-          );
-          const attendanceSnapshot = await getDocs(attendanceQuery);
-
-          // Fetch event details
-          const eventsRef = collection(db, "events");
-          const eventsSnapshot = await getDocs(eventsRef);
-          const eventsMap = new Map(
-            eventsSnapshot.docs.map((doc) => [doc.id, doc.data()])
-          );
-
-          // Map attendance records with event details
-          const records = await Promise.all(
-            attendanceSnapshot.docs.map(async (doc) => {
-              const data = doc.data();
-              const event = eventsMap.get(data.eventId);
-              return {
-                id: doc.id,
-                date: (data.timestamp as Timestamp).toDate().toISOString(),
-                className: event?.title || `Event ${data.eventId}`,
-                status: data.status as "present" | "absent",
-                eventTitle: event?.title,
-              };
-            })
-          );
-
-          setAttendanceRecords(records);
-          localStorage.setItem("attendanceData", JSON.stringify(records));
-        } else {
-          // Load from cache if offline
+        if (!isOnline || !user) {
+          // Load from cache if offline or no user
           const cachedData = localStorage.getItem("attendanceData");
           if (cachedData) {
-            setAttendanceRecords(JSON.parse(cachedData));
+            if (isMounted) {
+              setAttendanceRecords(JSON.parse(cachedData));
+              setLoading(false);
+            }
+          } else {
+            if (isMounted) {
+              setAttendanceRecords([]);
+              setLoading(false);
+            }
           }
+          return;
+        }
+
+        // Fetch attendance records with limit
+        const attendanceRef = collection(db, "attendance");
+        const attendanceQuery = query(
+          attendanceRef,
+          where("userId", "==", user.uid),
+          limit(50) // Limit to last 50 records
+        );
+
+        const [attendanceSnapshot, sessionsSnapshot, coursesSnapshot] =
+          await Promise.all([
+            getDocs(attendanceQuery),
+            getDocs(collection(db, "sessions")),
+            getDocs(collection(db, "courses")),
+          ]);
+
+        // Create sessions map
+        const sessionsMap = new Map<string, Session>(
+          sessionsSnapshot.docs.map((doc) => [
+            doc.id,
+            { id: doc.id, ...doc.data() } as Session,
+          ])
+        );
+
+        // Create courses map
+        const coursesMap = new Map<string, Course>(
+          coursesSnapshot.docs.map((doc) => [
+            doc.id,
+            { id: doc.id, ...doc.data() } as Course,
+          ])
+        );
+
+        // Process attendance records
+        const records = attendanceSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          const session = sessionsMap.get(data.sessionId) || ({} as Session);
+          const course = session.courseId
+            ? coursesMap.get(session.courseId)
+            : null;
+
+          const className = course
+            ? `${course.code} - ${course.title}`
+            : session.title
+            ? session.title
+            : "Class Session";
+
+          // Get location from the attendance record's location object
+          const locationName =
+            data.location?.locationName || session.location || "N/A";
+
+          return {
+            id: doc.id,
+            date: (data.timestamp as Timestamp).toDate().toISOString(),
+            className: className,
+            status: data.status as "present" | "absent",
+            courseCode: course?.code,
+            location: locationName,
+          };
+        });
+
+        if (isMounted) {
+          setAttendanceRecords(records);
+          localStorage.setItem("attendanceData", JSON.stringify(records));
         }
       } catch (err) {
         console.error("Error fetching attendance data:", err);
-        setError("Failed to load attendance data");
-
-        // Try to load from cache if online fetch fails
+        // Try to load from cache if fetch fails
         const cachedData = localStorage.getItem("attendanceData");
-        if (cachedData) {
-          setAttendanceRecords(JSON.parse(cachedData));
+        if (isMounted) {
+          if (cachedData) {
+            setAttendanceRecords(JSON.parse(cachedData));
+          } else {
+            setAttendanceRecords([]);
+          }
+          setError("Failed to load latest attendance data");
         }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadAttendanceData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [isOnline, user]);
 
   const handleScanClick = () => {
